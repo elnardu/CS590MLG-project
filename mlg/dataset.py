@@ -24,7 +24,7 @@ class NETTACKDataset(InMemoryDataset):
         A = A.tocoo()
         row = torch.from_numpy(A.row).to(torch.long)
         col = torch.from_numpy(A.col).to(torch.long)
-        self.og_edge_index = edge_index = torch.stack([row, col], dim=0)
+        self.og_edge_index = torch.stack([row, col], dim=0)
 
         self.og_y = self.surrogate_params["_z_obs"]
 
@@ -74,7 +74,7 @@ class NETTACKDataset(InMemoryDataset):
                         (
                             data.edge_index[:, :i],
                             data.edge_index[:, i + 1 : j],
-                            data.edge_index[:, j:],
+                            data.edge_index[:, j+1:],
                         ),
                         1,
                     )
