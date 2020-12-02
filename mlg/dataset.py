@@ -1,14 +1,28 @@
 import pickle
 from glob import glob
 from pathlib import Path
+from functools import reduce
+from copy import copy
 
 import torch
 from torch_geometric.data import Data, InMemoryDataset
 
 
+def combine_examples(ex1, ex2):
+    ex = copy(ex1)
+    ex.feature_perturbations = ex1.feature_perturbations + ex2.feature_perturbations
+    ex.structure_perturbations = (
+        ex1.structure_perturbations + ex2.structure_perturbations
+    )
+    ex.attacked_nodes = ex1.attacked_nodes + ex2.attacked_nodes
+    return ex
+
+
 class NETTACKDataset(InMemoryDataset):
     def __init__(
-        self, root=Path("/u/scratch2/eutiushe/CS590MLG-project/nettack_dataset_gen")
+        self,
+        root=Path("/u/scratch2/eutiushe/CS590MLG-project/nettack_dataset_gen"),
+        combine_n=1,
     ):
         super(NETTACKDataset, self).__init__(None, self.transform_data)
 
@@ -16,7 +30,6 @@ class NETTACKDataset(InMemoryDataset):
         self.surrogate_params = pickle.load(
             open(root / "surrogate_params.pickle", "rb")
         )
-
         # original values on an unmodified graph
         self.og_x = torch.tensor(self.surrogate_params["_X_obs"].todense())
 
@@ -29,9 +42,16 @@ class NETTACKDataset(InMemoryDataset):
         self.og_y = self.surrogate_params["_z_obs"]
 
         self.data_paths = sorted(glob(str(root / "dataset" / "*.pickle")))
-        self.data, self.slices = self.collate(
-            list(map(self.load_data_object, self.data_paths))
-        )
+        loaded_examples = list(map(self.load_data_object, self.data_paths))
+        if combine_n > 1:
+            new_examples = []
+            for i in range(len(loaded_examples) - combine_n):
+                new_examples.append(
+                    reduce(combine_examples, loaded_examples[i : i + combine_n])
+                )
+            loaded_examples = new_examples
+
+        self.data, self.slices = self.collate(loaded_examples)
 
     def transform_data(self, data):
         data.x = self.og_x.clone()
@@ -74,7 +94,7 @@ class NETTACKDataset(InMemoryDataset):
                         (
                             data.edge_index[:, :i],
                             data.edge_index[:, i + 1 : j],
-                            data.edge_index[:, j+1:],
+                            data.edge_index[:, j + 1 :],
                         ),
                         1,
                     )
@@ -85,7 +105,7 @@ class NETTACKDataset(InMemoryDataset):
         obj = pickle.load(open(data_path, "rb"))
         data = Data(
             y=self.og_y,
-            attacked_node=obj["params"]["u"],
+            attacked_nodes=[obj["params"]["u"]],
             structure_perturbations=obj["structure_perturbations"],
             feature_perturbations=obj["feature_perturbations"],
             direct_attack=obj["params"]["direct_attack"],
