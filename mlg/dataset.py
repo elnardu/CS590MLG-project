@@ -1,4 +1,5 @@
 import pickle
+from random import shuffle
 from glob import glob
 from pathlib import Path
 from functools import reduce
@@ -9,6 +10,8 @@ from torch_geometric.data import Data, InMemoryDataset
 
 
 def combine_examples(ex1, ex2):
+    if ex2.attacked_nodes[0] in ex1.attacked_nodes:
+        return ex1
     ex = copy(ex1)
     ex.feature_perturbations = ex1.feature_perturbations + ex2.feature_perturbations
     ex.structure_perturbations = (
@@ -45,9 +48,9 @@ class NETTACKDataset(InMemoryDataset):
         loaded_examples = list(map(self.load_data_object, self.data_paths))
         if combine_n > 1:
             new_examples = []
-            for i in range(len(loaded_examples) - combine_n):
+            for i in range(len(loaded_examples)//combine_n+1):
                 new_examples.append(
-                    reduce(combine_examples, loaded_examples[i : i + combine_n])
+                    reduce(combine_examples, loaded_examples[combine_n*i:combine_n*(i+1)])
                 )
             loaded_examples = new_examples
 
